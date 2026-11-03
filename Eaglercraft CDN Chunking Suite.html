@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eaglercraft CDN Chunking & SVG Loader Tool</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            900: '#14532d',
+                            950: '#052e16',
+                        },
+                        dark: {
+                            bg: '#0b0f17',
+                            card: '#111827',
+                            border: '#1f2937',
+                            muted: '#374151'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- JSZip for optional zip download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom scrollbar for dark tech aesthetic */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f17;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1f2937;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #374151;
+        }
+        .glow-effect {
+            box-shadow: 0 0 25px -5px rgba(34, 197, 94, 0.15);
+        }
+    </style>
+</head>
+<body class="bg-dark-bg text-gray-200 min-h-screen font-sans flex flex-col antialiased selection:bg-brand-500 selection:text-black">
+
+    <!-- Header Navigation -->
+    <header class="border-b border-dark-border bg-dark-card/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-500 text-xl font-bold">
+                    <i class="fa-solid fa-[#000]"></i>
+                    <i class="fa-solid fa-puzzle-piece"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-wide text-white flex items-center gap-2">
+                        EaglerSplit <span class="text-xs font-mono bg-brand-500/20 text-brand-500 px-2 py-0.5 rounded border border-brand-500/30">CDN Bypass v1.0</span>
+                    </h1>
+                    <p class="text-xs text-gray-400">Split HTML files >20MB for jsDelivr serving via SVG stitching</p>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="flex space-x-2 bg-dark-bg p-1 rounded-lg border border-dark-border">
+                <button id="tab-splitter-btn" onclick="switchTab('splitter')" class="px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 bg-brand-600 text-white shadow-sm flex items-center gap-2">
+                    <i class="fa-solid fa-scissors"></i> Chunk Splitter
+                </button>
+                <button id="tab-tester-btn" onclick="switchTab('tester')" class="px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 text-gray-400 hover:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-vial"></i> Live Reassembler & Test
+                </button>
+                <button id="tab-docs-btn" onclick="switchTab('docs')" class="px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 text-gray-400 hover:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-book-open"></i> Deployment Guide
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- ================= SECTION 1: FILE SPLITTER ================= -->
+        <section id="tab-splitter" class="space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Left Control Panel -->
+                <div class="lg:col-span-1 space-y-6">
+                    <!-- Config Card -->
+                    <div class="bg-dark-card rounded-xl border border-dark-border p-5 space-y-4 glow-effect">
+                        <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-sliders text-brand-500"></i> Split Configuration
+                        </h2>
+                        
+                        <!-- File Upload -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Target HTML File</label>
+                            <div id="drop-zone" class="border-2 border-dashed border-dark-border hover:border-brand-500/50 rounded-lg p-6 text-center cursor-pointer transition-colors bg-dark-bg/50">
+                                <input type="file" id="file-input" accept=".html,.htm" class="hidden" onchange="handleFileSelect(event)">
+                                <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-500 mb-2"></i>
+                                <p class="text-xs text-gray-300 font-medium">Click to select or drag & drop</p>
+                                <p class="text-[10px] text-gray-500 mt-1">Single-file Eaglercraft .html client</p>
+                            </div>
+                            <div id="file-info" class="hidden mt-2 p-2 bg-brand-500/10 border border-brand-500/30 rounded text-xs text-brand-500 font-mono flex items-center justify-between">
+                                <span id="file-name" class="truncate max-w-[180px]">file.html</span>
+                                <span id="file-size" class="font-bold">0 MB</span>
+                            </div>
+                        </div>
+
+                        <!-- Chunk Size Setting -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                                Max Chunk Size (MB)
+                                <span class="text-brand-500 hover:underline cursor-pointer float-right font-normal lowercase text-[11px]" title="jsDelivr strict limit is 20MB">
+                                    <i class="fa-solid fa-circle-info"></i> jsDelivr cap: 20MB
+                                </span>
+                            </label>
+                            <div class="relative">
+                                <input type="number" id="chunk-size" value="15" min="1" max="19" step="0.5" class="w-full bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+                                <span class="absolute right-3 top-2.5 text-xs text-gray-500 font-mono">MB</span>
+                            </div>
+                            <p class="text-[11px] text-gray-500 mt-1">Recommended: 12MB - 16MB to account for CDN overhead.</p>
+                        </div>
+
+                        <hr class="border-dark-border">
+
+                        <!-- GitHub Details for Loader -->
+                        <div class="space-y-3">
+                            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">GitHub CDN Settings</h3>
+                            
+                            <div>
+                                <label class="block text-[11px] text-gray-400 mb-1">GitHub Username / Org</label>
+                                <input type="text" id="gh-user" placeholder="e.g. MyUsername" class="w-full bg-dark-bg border border-dark-border rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500">
+                            </div>
+
+                            <div>
+                                <label class="block text-[11px] text-gray-400 mb-1">Repository Name</label>
+                                <input type="text" id="gh-repo" placeholder="e.g. eaglercraft-builds" class="w-full bg-dark-bg border border-dark-border rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[11px] text-gray-400 mb-1">Branch / Tag</label>
+                                    <input type="text" id="gh-branch" value="main" class="w-full bg-dark-bg border border-dark-border rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-gray-400 mb-1">Subfolder Path</label>
+                                    <input type="text" id="gh-path" placeholder="e.g. client/ (optional)" class="w-full bg-dark-bg border border-dark-border rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Button -->
+                        <button id="split-btn" onclick="processSplit()" disabled class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 disabled:hover:bg-brand-600 text-white font-semibold rounded-lg shadow transition-all duration-200 flex items-center justify-center gap-2 text-sm">
+                            <i class="fa-solid fa-bolt"></i> Process & Generate Chunks
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Right Preview & Download Panel -->
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-dark-card rounded-xl border border-dark-border p-5 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-box-archive text-brand-500"></i> Output Artifacts
+                            </h2>
+                            <button id="download-all-btn" onclick="downloadZip()" disabled class="px-3 py-1 bg-dark-bg hover:bg-dark-border border border-dark-border disabled:opacity-40 rounded text-xs text-brand-500 font-medium transition-colors flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-zipper"></i> Download All (.ZIP)
+                            </button>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div id="progress-container" class="hidden space-y-1">
+                            <div class="flex justify-between text-xs text-gray-400">
+                                <span id="progress-status">Processing file...</span>
+                                <span id="progress-percent">0%</span>
+                            </div>
+                            <div class="w-full bg-dark-bg rounded-full h-2 overflow-hidden border border-dark-border">
+                                <div id="progress-bar" class="bg-brand-500 h-full w-0 transition-all duration-150"></div>
+                            </div>
+                        </div>
+
+                        <!-- Chunk Output List -->
+                        <div id="chunks-output-list" class="space-y-2 min-h-[160px] max-h-[300px] overflow-y-auto pr-1">
+                            <div class="text-center py-12 text-gray-500 text-xs flex flex-col items-center">
+                                <i class="fa-solid fa-folder-open text-3xl mb-2 opacity-40"></i>
+                                Upload an HTML file and click Process to generate your split files.
+                            </div>
+                        </div>
+
+                        <!-- SVG Loader Script Preview Box -->
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <i class="fa-solid fa-code text-brand-500"></i> Generated Master SVG Loader Preview
+                                </label>
+                                <button onclick="copySvgCode()" class="text-xs text-gray-400 hover:text-brand-500 font-mono transition-colors">
+                                    <i class="fa-solid fa-copy"></i> Copy SVG Text
+                                </button>
+                            </div>
+                            <pre class="bg-dark-bg border border-dark-border rounded-lg p-3 text-[11px] font-mono text-gray-300 max-h-[220px] overflow-auto select-all" id="svg-preview"><code>&lt;!-- Generated SVG loader will appear here after processing --&gt;</code></pre>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ================= SECTION 2: LIVE REASSEMBLER & TEST ================= -->
+        <section id="tab-tester" class="hidden space-y-6">
+            <div class="bg-dark-card rounded-xl border border-dark-border p-5 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-vial-circle-check text-brand-500"></i> In-Browser Reassembler & Test Canvas
+                        </h2>
+                        <p class="text-xs text-gray-400">Verify your split chunks work properly before pushing to production or test direct SVG URLs.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="testLocalChunks()" class="px-3 py-1.5 bg-dark-bg hover:bg-dark-border border border-dark-border text-xs text-white rounded font-medium transition-colors flex items-center gap-1.5">
+                            <i class="fa-solid fa-folder-plus text-brand-500"></i> Select Local `part*.html` Chunks
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="md:col-span-3">
+                        <input type="text" id="test-svg-url" placeholder="Paste live jsDelivr SVG URL (e.g., https://cdn.jsdelivr.net/gh/user/repo@main/index.svg)" class="w-full bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+                    </div>
+                    <button onclick="testRemoteSvg()" class="py-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-lg shadow transition-colors flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-play"></i> Fetch & Load SVG URL
+                    </button>
+                </div>
+
+                <!-- Local Selected files tracker -->
+                <div id="local-test-files" class="hidden text-xs bg-dark-bg border border-dark-border rounded p-2 text-gray-400 flex items-center justify-between">
+                    <span id="local-test-count" class="font-mono">0 files selected</span>
+                    <button onclick="runLocalAssembly()" class="px-2 py-1 bg-brand-600 text-white rounded hover:bg-brand-500 font-semibold text-[11px]">Assemble Selected Files</button>
+                </div>
+
+                <!-- Test Execution Frame Container -->
+                <div class="border border-dark-border rounded-xl bg-black overflow-hidden flex flex-col h-[650px] relative">
+                    <!-- Frame Header Bar -->
+                    <div class="bg-dark-card border-b border-dark-border px-4 py-2 flex items-center justify-between text-xs">
+                        <div class="flex items-center gap-2 text-gray-400 font-mono">
+                            <span class="w-3 h-3 rounded-full bg-red-500/80 inline-block"></span>
+                            <span class="w-3 h-3 rounded-full bg-yellow-500/80 inline-block"></span>
+                            <span class="w-3 h-3 rounded-full bg-green-500/80 inline-block"></span>
+                            <span class="ml-2 text-gray-300" id="preview-status-label">Viewport Idle</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button onclick="reloadPreview()" title="Reload Preview" class="text-gray-400 hover:text-white">
+                                <i class="fa-solid fa-rotate-right"></i>
+                            </button>
+                            <button onclick="openPreviewBlobTab()" title="Open in New Tab" class="text-gray-400 hover:text-white">
+                                <i class="fa-solid fa-up-right-from-square"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Sandbox Iframe -->
+                    <iframe id="preview-iframe" class="w-full flex-1 border-none bg-black" sandbox="allow-scripts allow-same-origin allow-downloads allow-forms allow-modals"></iframe>
+                    
+                    <!-- Overlay Loader for iframe -->
+                    <div id="test-loader-overlay" class="absolute inset-0 bg-dark-bg/90 backdrop-blur flex flex-col items-center justify-center gap-3 hidden">
+                        <div class="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+                        <p class="text-sm font-semibold text-white" id="test-loader-text">Fetching & Stitching Chunks...</p>
+                        <div class="w-64 bg-dark-card rounded-full h-1.5 overflow-hidden border border-dark-border">
+                            <div id="test-loader-bar" class="bg-brand-500 h-full w-0 transition-all duration-200"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SECTION 3: DEPLOYMENT GUIDE ================= -->
+        <section id="tab-docs" class="hidden space-y-6">
+            <div class="bg-dark-card rounded-xl border border-dark-border p-6 space-y-6">
+                <div>
+                    <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-book-bookmark text-brand-500"></i> Deployment & CDN Bypass Workflow Guide
+                    </h2>
+                    <p class="text-sm text-gray-400 mt-1">
+                        jsDelivr enforces a strict hard limit of <strong class="text-white">20MB per file</strong>. Heavy HTML single-file builds (like Eaglercraft WebGL clients containing embedded assets) exceed this cap. By splitting the main HTML string across multiple sub-files and using an SVG dynamic loader, you completely bypass this limit.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Step 1 -->
+                    <div class="bg-dark-bg border border-dark-border p-4 rounded-lg space-y-2">
+                        <div class="w-7 h-7 rounded bg-brand-500/20 text-brand-500 font-mono font-bold flex items-center justify-center text-sm border border-brand-500/40">1</div>
+                        <h3 class="font-semibold text-white text-sm">Split HTML Client</h3>
+                        <p class="text-xs text-gray-400">Upload your single `.html` Eaglercraft client into the Splitter tab. Set chunk size to ~15MB. Click process to get `part1.html`, `part2.html`, etc., and `index.svg`.</p>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="bg-dark-bg border border-dark-border p-4 rounded-lg space-y-2">
+                        <div class="w-7 h-7 rounded bg-brand-500/20 text-brand-500 font-mono font-bold flex items-center justify-center text-sm border border-brand-500/40">2</div>
+                        <h3 class="font-semibold text-white text-sm">Push to GitHub</h3>
+                        <p class="text-xs text-gray-400">Commit and push all generated `part*.html` files along with `index.svg` into your target GitHub repository branch.</p>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="bg-dark-bg border border-dark-border p-4 rounded-lg space-y-2">
+                        <div class="w-7 h-7 rounded bg-brand-500/20 text-brand-500 font-mono font-bold flex items-center justify-center text-sm border border-brand-500/40">3</div>
+                        <h3 class="font-semibold text-white text-sm">Access via CDN URL</h3>
+                        <p class="text-xs text-gray-400">Direct users or embeds to your jsDelivr SVG URL. The SVG will automatically download all chunks asynchronously, stitch them, and boot Eaglercraft instantly.</p>
+                    </div>
+                </div>
+
+                <!-- Code Architecture Detailed Explanation -->
+                <div class="space-y-3 pt-4 border-t border-dark-border">
+                    <h3 class="text-base font-semibold text-white">How the Single-File SVG Loader Works</h3>
+                    <p class="text-xs text-gray-400">
+                        An SVG file is valid XML and can execute embedded JavaScript via a `<script>` tag when opened directly in a web browser. Below is the exact architecture generated inside the `index.svg` master file:
+                    </p>
+
+                    <pre class="bg-dark-bg border border-dark-border p-4 rounded-lg text-xs font-mono text-gray-300 overflow-x-auto select-all"><code>&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"&gt;
+  &lt;script type="text/javascript"&gt;
+  &lt;![CDATA[
+    (async function() {
+      // 1. Array of chunk URLs on jsDelivr
+      const parts = [
+        "https://cdn.jsdelivr.net/gh/user/repo@main/part1.html",
+        "https://cdn.jsdelivr.net/gh/user/repo@main/part2.html"
+      ];
+      
+      // 2. Fetch all parts sequentially/parallelly
+      const textPromises = parts.map(url =&gt; fetch(url).then(r =&gt; r.text()));
+      const contents = await Promise.all(textPromises);
+      
+      // 3. Reassemble full HTML string
+      const fullHtml = contents.join("");
+      
+      // 4. Replace current SVG document content with original Eaglercraft HTML
+      document.open();
+      document.write(fullHtml);
+      document.close();
+    })();
+  ]]&gt;
+  &lt;/script&gt;
+  &lt;text x="50%" y="50%" fill="#fff" text-anchor="middle" font-family="sans-serif"&gt;Loading Eaglercraft Client...&lt;/text&gt;
+&lt;/svg&gt;</code></pre>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-dark-border py-4 text-center text-xs text-gray-500">
+        <p>Eaglercraft CDN Bypass Tool &bull; Designed for single-file web games & client distributions</p>
+    </footer>
+
+    <!-- Application Script Engine -->
+    <script>
+        // Global State Variables
+        let selectedFile = null;
+        let generatedChunks = []; // { name: string, content: string, blobUrl: string, size: number }
+        let generatedSvgContent = '';
+        let localTestFilesList = [];
+        let currentBlobPreviewUrl = null;
+
+        // Tab Switching Logic
+        function switchTab(tabId) {
+            ['splitter', 'tester', 'docs'].forEach(t => {
+                const sec = document.getElementById(`tab-${t}`);
+                const btn = document.getElementById(`tab-${t}-btn`);
+                if (t === tabId) {
+                    sec.classList.remove('hidden');
+                    btn.classList.add('bg-brand-600', 'text-white', 'shadow-sm');
+                    btn.classList.remove('text-gray-400');
+                } else {
+                    sec.classList.add('hidden');
+                    btn.classList.remove('bg-brand-600', 'text-white', 'shadow-sm');
+                    btn.classList.add('text-gray-400');
+                }
+            });
+        }
+
+        // File Selection Handlers
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-brand-500', 'bg-brand-500/5');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-brand-500', 'bg-brand-500/5');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-brand-500', 'bg-brand-500/5');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        function handleFileSelect(e) {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        }
+
+        function handleFile(file) {
+            if (!file.name.endsWith('.html') && !file.name.endsWith('.htm')) {
+                alert('Please upload a valid Eaglercraft single-file .html file.');
+                return;
+            }
+            selectedFile = file;
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            document.getElementById('file-name').innerText = file.name;
+            document.getElementById('file-size').innerText = `${sizeMB} MB`;
+            document.getElementById('file-info').classList.remove('hidden');
+            document.getElementById('split-btn').disabled = false;
+        }
+
+        // Main Splitting Engine
+        async function processSplit() {
+            if (!selectedFile) return;
+
+            const chunkSizeMB = parseFloat(document.getElementById('chunk-size').value) || 15;
+            const chunkSizeBytes = Math.floor(chunkSizeMB * 1024 * 1024);
+            const user = document.getElementById('gh-user').value.trim() || 'username';
+            const repo = document.getElementById('gh-repo').value.trim() || 'repository';
+            const branch = document.getElementById('gh-branch').value.trim() || 'main';
+            let path = document.getElementById('gh-path').value.trim();
+            
+            // Normalize path string
+            if (path && !path.endsWith('/')) path += '/';
+            if (path && path.startsWith('/')) path = path.substring(1);
+
+            // Reset States
+            generatedChunks = [];
+            const outputList = document.getElementById('chunks-output-list');
+            outputList.innerHTML = '';
+            
+            const progressContainer = document.getElementById('progress-container');
+            const progressBar = document.getElementById('progress-bar');
+            const progressPercent = document.getElementById('progress-percent');
+            const progressStatus = document.getElementById('progress-status');
+            
+            progressContainer.classList.remove('hidden');
+            progressBar.style.width = '0%';
+
+            try {
+                progressStatus.innerText = 'Reading file content...';
+                const fileText = await readFileAsText(selectedFile);
+                const totalBytes = new Blob([fileText]).size;
+                
+                // Calculate Chunk Boundaries carefully based on String byte lengths
+                progressStatus.innerText = 'Splitting file into chunks...';
+                
+                let offset = 0;
+                let partIndex = 1;
+                const totalLength = fileText.length;
+                
+                // Estimate character step based on byte size proportion
+                const avgBytePerChar = totalBytes / totalLength;
+                const charStep = Math.floor(chunkSizeBytes / avgBytePerChar);
+
+                while (offset < totalLength) {
+                    let end = Math.min(offset + charStep, totalLength);
+                    let chunkStr = fileText.slice(offset, end);
+                    
+                    const chunkFileName = `part${partIndex}.html`;
+                    const blob = new Blob([chunkStr], { type: 'text/html' });
+                    const blobUrl = URL.createObjectURL(blob);
+
+                    generatedChunks.push({
+                        name: chunkFileName,
+                        content: chunkStr,
+                        blobUrl: blobUrl,
+                        size: blob.size
+                    });
+
+                    offset = end;
+                    partIndex++;
+
+                    const pct = Math.round((offset / totalLength) * 100);
+                    progressBar.style.width = `${pct}%`;
+                    progressPercent.innerText = `${pct}%`;
+                }
+
+                progressStatus.innerText = 'Generating Master SVG Loader...';
+                
+                // Build Part CDN URLs for SVG
+                const partUrls = generatedChunks.map(c => 
+                    `https://cdn.jsdelivr.net/gh/${user}/${repo}@${branch}/${path}${c.name}`
+                );
+
+                // Build SVG Content
+                generatedSvgContent = buildSvgLoaderContent(partUrls);
+                
+                // Render Outputs UI
+                renderOutputList();
+                document.getElementById('svg-preview').innerText = generatedSvgContent;
+                document.getElementById('download-all-btn').disabled = false;
+                progressStatus.innerText = 'Completed successfully!';
+
+            } catch (err) {
+                console.error(err);
+                alert('Error during processing: ' + err.message);
+            }
+        }
+
+        // FileReader Helper
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(e);
+                reader.readAsText(file);
+            });
+        }
+
+        // SVG Master Loader Generator
+        function buildSvgLoaderContent(cdnUrls) {
+            const urlsJson = JSON.stringify(cdnUrls, null, 2);
+            return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0b0f17; }
+      .title { fill: #22c55e; font-family: system-ui, sans-serif; font-weight: bold; font-size: 22px; }
+      .sub { fill: #9ca3af; font-family: system-ui, sans-serif; font-size: 14px; }
+      .spinner { animation: spin 1.2s linear infinite; transform-origin: center; }
+      @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+  </defs>
+  <rect class="bg" width="100%" height="100%"/>
+  <circle class="spinner" cx="300" cy="270" r="30" stroke="#22c55e" stroke-width="4" stroke-dasharray="120 50" fill="none"/>
+  <text class="title" x="50%" y="350" text-anchor="middle">EAGLER-LOADER</text>
+  <text class="sub" x="50%" y="380" text-anchor="middle">Stitching CDN Chunks &amp; Booting Game...</text>
+
+  <script type="text/javascript">
+  <![CDATA[
+  (async function() {
+    const urls = ${urlsJson};
+
+    try {
+      console.log("[EaglerLoader] Fetching " + urls.length + " chunks...");
+      
+      // Fetch all chunk files asynchronously
+      const fetchPromises = urls.map(async (url) => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to load chunk: " + url + " (Status: " + res.status + ")");
+        return res.text();
+      });
+
+      const parts = await Promise.all(fetchPromises);
+      const fullHtml = parts.join("");
+
+      console.log("[EaglerLoader] Reassembly complete (" + fullHtml.length + " chars). Initializing document...");
+
+      // Replace current SVG document with compiled HTML
+      document.open();
+      document.write(fullHtml);
+      document.close();
+
+    } catch (err) {
+      console.error("[EaglerLoader] Error:", err);
+      document.body.innerHTML = '<div style="color:red;background:#111;padding:20px;font-family:sans-serif;"><h2>Failed to initialize Eaglercraft</h2><p>' + err.message + '</p></div>';
+    }
+  })();
+  ]]>
+  <\/script>
+</svg>`;
+        }
+
+        // Render Artifacts List
+        function renderOutputList() {
+            const container = document.getElementById('chunks-output-list');
+            container.innerHTML = '';
+
+            // Add SVG File Entry
+            const svgBlob = new Blob([generatedSvgContent], { type: 'image/svg+xml' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            
+            const svgItem = createArtifactItem('index.svg', svgBlob.size, svgUrl, true);
+            container.appendChild(svgItem);
+
+            // Add Chunk Entries
+            generatedChunks.forEach(chunk => {
+                const item = createArtifactItem(chunk.name, chunk.size, chunk.blobUrl, false);
+                container.appendChild(item);
+            });
+        }
+
+        function createArtifactItem(filename, sizeBytes, blobUrl, isSvg = false) {
+            const div = document.createElement('div');
+            div.className = 'flex items-center justify-between p-2.5 bg-dark-bg border border-dark-border rounded-lg text-xs';
+            
+            const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(2);
+            const icon = isSvg ? 'fa-file-code text-brand-500' : 'fa-file-lines text-blue-400';
+            
+            div.innerHTML = `
+                <div class="flex items-center space-x-2.5 overflow-hidden">
+                    <i class="fa-solid ${icon} text-sm"></i>
+                    <span class="font-mono font-medium text-gray-200 truncate">${filename}</span>
+                    <span class="text-[10px] text-gray-500 font-mono">(${sizeMB} MB)</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <a href="${blobUrl}" download="${filename}" class="px-2.5 py-1 bg-dark-card hover:bg-dark-muted border border-dark-border rounded text-gray-300 hover:text-white transition-colors flex items-center gap-1 font-mono text-[11px]">
+                        <i class="fa-solid fa-download"></i> Save
+                    </a>
+                </div>
+            `;
+            return div;
+        }
+
+        // Zip Packaging Download
+        async function downloadZip() {
+            if (generatedChunks.length === 0 || !generatedSvgContent) return;
+
+            const zip = new JSZip();
+            zip.file('index.svg', generatedSvgContent);
+            
+            generatedChunks.forEach(c => {
+                zip.file(c.name, c.content);
+            });
+
+            const content = await zip.generateAsync({ type: 'blob' });
+            const zipUrl = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = zipUrl;
+            a.download = 'eaglercraft-cdn-chunks.zip';
+            a.click();
+        }
+
+        // Copy SVG Preview Code
+        function copySvgCode() {
+            if (!generatedSvgContent) return;
+            const temp = document.createElement('textarea');
+            temp.value = generatedSvgContent;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            alert('SVG Loader script copied to clipboard!');
+        }
+
+        // ================= REASSEMBLER & LIVE TESTING =================
+        function testLocalChunks() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.multiple = true;
+            input.accept = '.html,.htm';
+            input.onchange = (e) => {
+                if (e.target.files.length > 0) {
+                    localTestFilesList = Array.from(e.target.files);
+                    // Sort files by natural part index (part1, part2, etc.)
+                    localTestFilesList.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+                    
+                    document.getElementById('local-test-count').innerText = `${localTestFilesList.length} files selected: ${localTestFilesList.map(f => f.name).join(', ')}`;
+                    document.getElementById('local-test-files').classList.remove('hidden');
+                }
+            };
+            input.click();
+        }
+
+        async function runLocalAssembly() {
+            if (localTestFilesList.length === 0) return;
+            showTestLoader('Reading & Stitching Local Chunks...');
+
+            try {
+                let fullHtml = '';
+                for (let i = 0; i < localTestFilesList.length; i++) {
+                    const file = localTestFilesList[i];
+                    updateTestProgress(Math.round(((i + 1) / localTestFilesList.length) * 100), `Reading ${file.name}...`);
+                    const text = await readFileAsText(file);
+                    fullHtml += text;
+                }
+
+                launchPreviewFromHtml(fullHtml);
+            } catch (err) {
+                alert('Assembly Error: ' + err.message);
+                hideTestLoader();
+            }
+        }
+
+        async function testRemoteSvg() {
+            const url = document.getElementById('test-svg-url').value.trim();
+            if (!url) {
+                alert('Please enter a valid jsDelivr SVG URL.');
+                return;
+            }
+
+            showTestLoader('Fetching SVG Master Loader...');
+            try {
+                const iframe = document.getElementById('preview-iframe');
+                iframe.src = url;
+                document.getElementById('preview-status-label').innerText = 'Loading Remote SVG: ' + url;
+                
+                // Hide loader overlay after iframe load
+                iframe.onload = () => {
+                    hideTestLoader();
+                };
+            } catch (err) {
+                alert('Failed to load remote SVG: ' + err.message);
+                hideTestLoader();
+            }
+        }
+
+        function launchPreviewFromHtml(htmlString) {
+            const blob = new Blob([htmlString], { type: 'text/html' });
+            if (currentBlobPreviewUrl) URL.revokeObjectURL(currentBlobPreviewUrl);
+            currentBlobPreviewUrl = URL.createObjectURL(blob);
+
+            const iframe = document.getElementById('preview-iframe');
+            iframe.src = currentBlobPreviewUrl;
+            document.getElementById('preview-status-label').innerText = 'Running Reassembled Client Blob';
+            
+            setTimeout(() => {
+                hideTestLoader();
+            }, 300);
+        }
+
+        function reloadPreview() {
+            const iframe = document.getElementById('preview-iframe');
+            iframe.contentWindow.location.reload();
+        }
+
+        function openPreviewBlobTab() {
+            if (currentBlobPreviewUrl) {
+                window.open(currentBlobPreviewUrl, '_blank');
+            } else {
+                const iframe = document.getElementById('preview-iframe');
+                if (iframe.src) window.open(iframe.src, '_blank');
+            }
+        }
+
+        function showTestLoader(msg) {
+            const overlay = document.getElementById('test-loader-overlay');
+            document.getElementById('test-loader-text').innerText = msg;
+            document.getElementById('test-loader-bar').style.width = '0%';
+            overlay.classList.remove('hidden');
+        }
+
+        function updateTestProgress(pct, msg) {
+            document.getElementById('test-loader-text').innerText = msg;
+            document.getElementById('test-loader-bar').style.width = `${pct}%`;
+        }
+
+        function hideTestLoader() {
+            document.getElementById('test-loader-overlay').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
