@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
   <foreignObject width="100%" height="100%">
-    <div xmlns="http://www.w3.org/1999/xhtml" id="app">Loading Eaglercraft...</div>
+    <div xmlns="http://www.w3.org/1999/xhtml" id="app" style="color:white;font-family:sans-serif;padding:20px;">Loading Eaglercraft...</div>
   </foreignObject>
   <script type="text/javascript">
     <![CDATA[
@@ -13,9 +13,14 @@
             return r.text();
           })));
           const fullHtml = responses.join("");
-          document.open();
-          document.write(fullHtml);
-          document.close();
+          const parsed = new DOMParser().parseFromString(fullHtml, "text/html");
+          document.replaceChild(parsed.documentElement, document.documentElement);
+          Array.from(parsed.querySelectorAll("script")).forEach(oldScript => {
+            const newScript = document.createElement("script");
+            Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+            newScript.textContent = oldScript.textContent;
+            (document.head || document.documentElement).appendChild(newScript);
+          });
         } catch(err) {
           const el = document.getElementById("app") || document.documentElement;
           el.textContent = "Error loading game chunks: " + err.message;
